@@ -20,7 +20,7 @@ Cada uno marca los días que puede. Cuando **todos** coinciden en un día, apare
 3. Ve a **Clientes → Crear cliente** (o «Credenciales → Crear credenciales → ID de cliente de OAuth»):
    - Tipo: **Aplicación web**.
    - **Orígenes de JavaScript autorizados:** añade tu dirección de Vercel, p. ej. `https://kdd-xxx.vercel.app` (sin barra al final). Si usas un dominio propio, añádelo también.
-   - No hace falta rellenar «URIs de redireccionamiento».
+   - **URIs de redireccionamiento autorizados:** añade `https://kdd-xxx.vercel.app/api/login`. Hace falta para entrar desde la app instalada en el móvil.
 4. Copia el **ID de cliente** (termina en `.apps.googleusercontent.com`).
 
 ## 2. Variables en Vercel
@@ -36,6 +36,20 @@ En el proyecto de Vercel, **Settings → Environment Variables** (Production and
 Puedes borrar `INVITE_CODE` y `ADMIN_CODE` si siguen ahí de versiones anteriores.
 
 Después: sube los archivos al repositorio (Vercel despliega solo) o haz **Redeploy**.
+
+## App en el móvil y avisos
+
+La web es una **app instalable** (PWA):
+
+- **Android (Chrome):** botón **Instalar app** arriba a la derecha, o menú ⋮ → *Instalar aplicación*.
+- **iPhone (Safari):** botón *Compartir* → **Añadir a pantalla de inicio**. La propia web lo explica con el botón *Instalar app*.
+
+**Avisos:** en la ficha de cada KDD (y en la pantalla de inicio) está el botón **Activar avisos**. Llegan cuando:
+
+- todos coincidís en un día («¡Hay KDD! Sábado 17 de octubre…»), una sola vez por fecha;
+- alguien se une a una KDD que organizas.
+
+En iPhone solo funcionan con la app instalada en la pantalla de inicio (iOS 16.4 o posterior). Los avisos se activan por dispositivo. No hace falta configurar nada en Vercel: las claves de los avisos se crean solas la primera vez y se guardan en Redis.
 
 ## Qué puede hacer quien organiza
 
@@ -62,5 +76,9 @@ api/state.js        GET  estado de una KDD
 api/join.js         POST unirse
 api/me.js           POST cambiar tus días, nombre o «añadido al calendario»
 api/admin.js        POST ajustes y quitar miembros (solo quien organiza)
-lib/                Redis, sesión, verificación de Google y utilidades
+api/push.js         GET clave pública / POST guardar o borrar la suscripción a avisos
+api/inbox.js        GET  últimos avisos (lo lee el service worker)
+public/sw.js        service worker: app sin conexión y avisos
+public/manifest.webmanifest, public/icons/   datos e iconos de la app instalable
+lib/                Redis, sesión, Google, avisos push y utilidades
 ```

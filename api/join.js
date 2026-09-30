@@ -1,6 +1,7 @@
 // POST /api/join {g, name} — entra en una KDD con tu cuenta de Google
 import { readRequest, loadGroup, send, requireUser, cleanName, publicMember, safe } from "../lib/http.js";
 import { getMembers, saveMember } from "../lib/store.js";
+import { checkMatch, notifyUsers, originOf } from "../lib/notify.js";
 
 const MAX_MEMBERS = 50;
 
@@ -24,6 +25,16 @@ async function handler(req, res) {
 
   const m = { id: u.uid, name, picture: u.picture || null, days: [], added: null, admin: false, joinedAt: Date.now() };
   await saveMember(grp.g, m);
+  try {
+    const admins = members.filter(x => x.admin).map(x => x.id);
+    await notifyUsers(admins, {
+      title: `${name} se ha unido`,
+      body: `Ya sois ${members.length + 1} en «${grp.config.title || "KDD"}».`,
+      url: `/?kdd=${grp.g}`,
+      tag: `join-${grp.g}`,
+    }, originOf(req));
+    await checkMatch(grp.g, grp.config, [...members, m], originOf(req)); // alguien nuevo puede deshacer la coincidencia
+  } catch (err) { console.error("[kdd] avisos", err); }
   send(res, 200, { member: publicMember(m) });
 }
 export default safe(handler);

@@ -6,7 +6,15 @@
 <meta name="robots" content="noindex, nofollow">
 <meta name="color-scheme" content="light dark">
 <title>Quedada KDD</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='6' width='26' height='23' rx='5' fill='%232E4BD1'/%3E%3Crect x='3' y='6' width='26' height='7' rx='3' fill='%23F5B400'/%3E%3Ccircle cx='16' cy='21' r='4' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="theme-color" content="#F3F4F8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#11131C" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="KDD">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
@@ -139,6 +147,18 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
 .sharebox{flex:1 1 320px;display:flex;flex-direction:column;gap:10px;min-width:0}
 .sharebox .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 #shareLink{font:500 13px var(--f-mono)}
+
+.headright{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px}
+button.install{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+.ioshelp{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between}
+.ioshelp ol{margin:10px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.pushbox:empty{display:none}
+.pushbox{display:flex;flex-direction:column;gap:8px}
+.pushbox.inset{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+.pushbox h3{font-size:16px}
+.pushbox p{margin:0;font-size:13px;color:var(--muted)}
+.pushbox .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pushbox .ok{color:var(--fg);font-weight:600;font-size:14px}
 </style>
 </head>
 <body>
@@ -149,8 +169,24 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
       <div class="eyebrow" id="homeEyebrow">Calendario del grupo</div>
       <h1 id="evTitle">KDD</h1>
     </div>
-    <div class="who" id="who"></div>
+    <div class="headright">
+      <button type="button" class="install" id="installBtn" hidden>Instalar app</button>
+      <div class="who" id="who"></div>
+    </div>
   </header>
+
+  <section class="panel ioshelp" id="iosHelp" hidden>
+    <div class="grow">
+      <h2>Instala KDD en tu iPhone</h2>
+      <ol>
+        <li>Abre esta página en <b>Safari</b>.</li>
+        <li>Pulsa el botón <b>Compartir</b> (el cuadrado con la flecha hacia arriba).</li>
+        <li>Elige <b>Añadir a pantalla de inicio</b> y pulsa <b>Añadir</b>.</li>
+        <li>Abre KDD desde el icono nuevo. Ahí podrás activar los avisos.</li>
+      </ol>
+    </div>
+    <button type="button" class="link" id="iosHelpClose">Cerrar</button>
+  </section>
 
   <div id="notice" hidden></div>
 
@@ -195,6 +231,7 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
       <h2>Tus KDD</h2>
       <ul class="mylist" id="myGroups"></ul>
     </section>
+    <section class="panel pushbox" data-pushbox style="margin-top:20px"></section>
   </div>
 
   <section class="panel" id="gate" hidden>
@@ -263,6 +300,7 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
       <h2>El grupo</h2>
       <p class="muted" style="margin:4px 0 0;font-size:13px" id="groupSub">Nadie se ha unido todavía.</p>
       <ul class="members" id="members"></ul>
+      <div class="pushbox inset" data-pushbox></div>
       <details id="ownerBox" style="margin-top:18px" hidden>
         <summary>Ajustes de la quedada</summary>
         <form id="settingsForm">
@@ -290,6 +328,7 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
   const DOW = ["lun","mar","mié","jue","vie","sáb","dom"];
 
   const params = new URLSearchParams(location.search);
+  const isStandalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   const group = (params.get("kdd") || "").trim() || null;
   let sharing = params.get("nuevo") === "1";
   if (params.has("nuevo")) history.replaceState(null, "", location.pathname + "?kdd=" + encodeURIComponent(group || ""));
@@ -407,7 +446,10 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
       const sc = document.createElement("script");
       sc.src = "https://accounts.google.com/gsi/client"; sc.async = true;
       sc.onload = () => {
-        google.accounts.id.initialize({ client_id: clientId, callback: onGoogleCredential, ux_mode: "popup", auto_select: false, context: "signin" });
+        // En la app instalada las ventanas emergentes fallan: Google redirige de vuelta a /api/login
+        google.accounts.id.initialize(isStandalone
+          ? { client_id: clientId, ux_mode: "redirect", login_uri: location.origin + "/api/login", auto_select: false, context: "signin" }
+          : { client_id: clientId, callback: onGoogleCredential, ux_mode: "popup", auto_select: false, context: "signin" });
         resolve();
       };
       sc.onerror = () => reject(new Error("No se pudo cargar el inicio de sesión de Google."));
@@ -420,6 +462,7 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
     $("home").hidden = true; $("app").hidden = true; $("joinPanel").hidden = true; $("sharePanel").hidden = true;
     $("loginPanel").hidden = false;
     $("loginTitle").textContent = title; $("loginText").textContent = text;
+    try { localStorage.setItem("kdd_next", location.search); } catch {}   // para volver aquí tras el login en modo app
     try {
       await loadGsi();
       const box = $("gBtn"); box.textContent = "";
@@ -722,8 +765,99 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
     location.href = "?kdd=" + m[1];
   });
 
+  /* ---------- app instalable ---------- */
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  let deferredInstall = null;
+  function renderInstall(){
+    const btn = $("installBtn");
+    btn.hidden = isStandalone || !(deferredInstall || isIOS);
+  }
+  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredInstall = e; renderInstall(); });
+  window.addEventListener("appinstalled", () => { deferredInstall = null; $("installBtn").hidden = true; toast("App instalada"); });
+  $("installBtn").onclick = async () => {
+    if (deferredInstall) { deferredInstall.prompt(); await deferredInstall.userChoice.catch(() => {}); deferredInstall = null; renderInstall(); }
+    else if (isIOS) { $("iosHelp").hidden = false; $("iosHelp").scrollIntoView({behavior:"smooth", block:"start"}); }
+  };
+  $("iosHelpClose").onclick = () => { $("iosHelp").hidden = true; };
+
+  let swReg = null;
+  const swReady = ("serviceWorker" in navigator)
+    ? navigator.serviceWorker.register("/sw.js").then(r => (swReg = r)).catch(() => null)
+    : Promise.resolve(null);
+
+  /* ---------- avisos (notificaciones push) ---------- */
+  const pushSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  let pushState = "loading";   // loading | unsupported | ios-install | denied | off | on
+  const b64ToBytes = s => { s = s.replace(/-/g,"+").replace(/_/g,"/"); const raw = atob(s + "===".slice((s.length + 3) % 4)); return Uint8Array.from(raw, c => c.charCodeAt(0)); };
+
+  async function syncPush(){
+    if (!user) { pushState = "loading"; return renderPush(); }
+    if (isIOS && !isStandalone) pushState = "ios-install";
+    else if (!pushSupported) pushState = "unsupported";
+    else if (Notification.permission === "denied") pushState = "denied";
+    else {
+      const reg = await swReady;
+      const sub = reg && await reg.pushManager.getSubscription().catch(() => null);
+      pushState = sub ? "on" : "off";
+      if (sub) api("push", { subscription: sub.toJSON() }).catch(() => {});   // por si entraste con otra cuenta
+    }
+    renderPush();
+  }
+  async function enablePush(){
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { pushState = perm === "denied" ? "denied" : "off"; return renderPush(); }
+      const reg = await swReady; if (!reg) throw new Error("sw");
+      const { publicKey } = await fetch("/api/push").then(r => r.json());
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) });
+      await api("push", { subscription: sub.toJSON() });
+      pushState = "on"; renderPush(); toast("Avisos activados");
+    } catch (err) {
+      if (err.status === 401) return showLogin("Tu sesión ha caducado", "Vuelve a entrar con Google para seguir.");
+      toast("No se pudieron activar los avisos en este dispositivo.");
+    }
+  }
+  async function disablePush(){
+    const reg = await swReady;
+    const sub = reg && await reg.pushManager.getSubscription();
+    if (sub) { api("push", { unsubscribe: sub.endpoint }).catch(() => {}); await sub.unsubscribe().catch(() => {}); }
+    pushState = "off"; renderPush(); toast("Avisos desactivados en este dispositivo");
+  }
+  function renderPush(){
+    for (const box of document.querySelectorAll("[data-pushbox]")) {
+      box.textContent = "";
+      if (pushState === "loading" || pushState === "unsupported") continue;
+      const h = document.createElement("h3"); h.textContent = "Avisos";
+      const p = document.createElement("p"); const row = document.createElement("div"); row.className = "row";
+      if (pushState === "ios-install") {
+        p.textContent = "En iPhone los avisos solo funcionan con la app instalada.";
+        const b = document.createElement("button"); b.textContent = "Cómo instalarla"; b.onclick = () => { $("iosHelp").hidden = false; $("iosHelp").scrollIntoView({behavior:"smooth"}); };
+        row.append(b);
+      } else if (pushState === "denied") {
+        p.textContent = "Has bloqueado los avisos. Para recibirlos, permítelos para esta web en los ajustes del navegador o del móvil.";
+      } else if (pushState === "on") {
+        const ok = document.createElement("span"); ok.className = "ok"; ok.textContent = "✓ Activados en este dispositivo";
+        const b = document.createElement("button"); b.className = "link subtle"; b.textContent = "Desactivar"; b.onclick = disablePush;
+        row.append(ok, b);
+        p.textContent = "Te avisaremos cuando coincidáis todos en un día y cuando alguien se una a tus KDD.";
+      } else {
+        p.textContent = "Recibe un aviso cuando coincidáis todos en un día y cuando alguien se una a tus KDD.";
+        const b = document.createElement("button"); b.className = "primary"; b.textContent = "Activar avisos"; b.onclick = enablePush;
+        row.append(b);
+      }
+      box.append(h, p, row);
+    }
+  }
+
   /* ---------- arranque ---------- */
   (async () => {
+    // Vuelta del login de Google en modo app: regresa a la KDD donde estabas
+    if (params.get("login") === "1") {
+      let next = ""; try { next = localStorage.getItem("kdd_next") || ""; localStorage.removeItem("kdd_next"); } catch {}
+      return location.replace(location.pathname + next);
+    }
+    if (params.get("login") === "error") notice("No se pudo iniciar sesión con Google. Inténtalo otra vez.", true);
+    renderInstall();
     if (group) { $("backLink").hidden = false; $("homeEyebrow").hidden = true; }
     try {
       const s = await api("session");
@@ -736,6 +870,7 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
       $("evTitle").textContent = "Quedada KDD";
       return showLogin("Organiza tu KDD", "Cada persona marca los días que puede. Cuando todos coincidís en uno, ese es el día de la KDD. Entra con tu cuenta de Google para empezar.");
     }
+    syncPush();
     if (!group) return showHome();
     render(); await refresh(); startPolling();
   })();
