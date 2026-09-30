@@ -1,14 +1,10 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { getMember } from "./store.js";
+import { randomBytes } from "node:crypto";
+import { getConfig, getMember } from "./store.js";
+import { readSession } from "./session.js";
 
-export const hash = s => createHash("sha256").update(String(s)).digest("hex");
-export const newId = () => randomBytes(9).toString("base64url");
-export const newToken = () => randomBytes(24).toString("base64url");
+export const newId = (bytes = 9) => randomBytes(bytes).toString("base64url");
 
-function safeEqual(a, b) {
-  const x = Buffer.from(hash(a || "")), y = Buffer.from(hash(b || ""));
-  return timingSafeEqual(x, y);
-}
+const GROUP_ID = /^[A-Za-z0-9_-]{16,32}$/;
 
 export function send(res, status, body) {
   res.statusCode = status;
@@ -25,31 +21,32 @@ async function readBody(req) {
   try { return raw ? JSON.parse(raw) : {}; } catch { return {}; }
 }
 
-/** Comprueba el código de invitación. Devuelve el body parseado o null (y ya ha respondido). */
-export async function guard(req, res, { method = "POST" } = {}) {
+/** Comprueba método y lee el body. Devuelve el body o null (y ya ha respondido). */
+export async function readRequest(req, res, method = "POST") {
   if (req.method !== method) { send(res, 405, { error: "Método no permitido" }); return null; }
-  const expected = process.env.INVITE_CODE;
-  if (!expected) { send(res, 500, { error: "Falta configurar INVITE_CODE en Vercel." }); return null; }
-  if (!safeEqual(req.headers["x-invite"], expected)) { send(res, 403, { error: "invite" }); return null; }
-  return method === "GET" ? {} : await readBody(req);
+  if (method === "GET") return Object.fromEntries(new URL(req.url, "http://x").searchParams);
+  return await readBody(req);
 }
 
-export function isAdmin(req) {
-  const expected = process.env.ADMIN_CODE;
-  return !!expected && safeEqual(req.headers["x-admin"], expected);
+/** Carga el grupo indicado en `g`. Devuelve {g, config} o null (y ya ha respondido). */
+export async function loadGroup(res, g) {
+  g = String(g || "");
+  const config = GROUP_ID.test(g) ? await getConfig(g) : null;
+  if (!config) { send(res, 404, { error: "group" }); return null; }
+  return { g, config };
 }
 
-/** Devuelve el miembro dueño del token, o null. */
-export async function currentMember(req) {
-  const id = String(req.headers["x-member"] || "");
-  const tok = String(req.headers["x-token"] || "");
-  if (!id || !tok) return null;
-  const m = await getMember(id);
-  if (!m || m.tokenHash !== hash(tok)) return null;
-  return m;
+/** Usuario con sesión iniciada, o null (y responde 401). */
+export function requireUser(req, res) {
+  const u = readSession(req);
+  if (!u) send(res, 401, { error: "login" });
+  return u;
 }
 
-export const publicMember = ({ tokenHash, ...m }) => m;
+/** Tu ficha de miembro en ese grupo, o null. */
+export const memberOf = (g, uid) => getMember(g, uid);
+
+export const publicMember = ({ tokenHash, email, ...m }) => m;
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 export function cleanDays(days) {
@@ -58,6 +55,16 @@ export function cleanDays(days) {
   return [...new Set(days.filter(d => typeof d === "string" && DAY.test(d) && d >= today))].sort().slice(0, 400);
 }
 export const cleanName = n => String(n || "").replace(/\s+/g, " ").trim().slice(0, 40);
+
+export function cleanConfig(c = {}, prev = {}) {
+  return {
+    ...prev,
+    title: String(c.title ?? prev.title ?? "").replace(/\s+/g, " ").trim().slice(0, 60) || "KDD",
+    time: /^\d{2}:\d{2}$/.test(c.time) ? c.time : (prev.time || "20:00"),
+    hours: Math.min(24, Math.max(0.5, Number(c.hours ?? prev.hours) || 3)),
+    place: String(c.place ?? prev.place ?? "").trim().slice(0, 120),
+  };
+}
 
 /** Envuelve un handler para que un fallo (p. ej. Redis caído) devuelva un error legible. */
 export const safe = fn => async (req, res) => {

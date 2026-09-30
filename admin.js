@@ -1,25 +1,25 @@
-// POST /api/admin {config?} | {remove: id} — solo con el código de organizador
-import { guard, send, isAdmin, safe } from "../lib/http.js";
+// POST /api/admin {g, config?} | {g, remove: uid} — solo el organizador de esa KDD
+import { readRequest, loadGroup, send, requireUser, memberOf, cleanConfig, safe } from "../lib/http.js";
 import { saveConfig, deleteMember } from "../lib/store.js";
 
 async function handler(req, res) {
-  const body = await guard(req, res);
+  const body = await readRequest(req, res);
   if (!body) return;
-  if (!isAdmin(req)) return send(res, 403, { error: "Solo quien organiza puede hacer esto." });
+  const u = requireUser(req, res);
+  if (!u) return;
+  const grp = await loadGroup(res, body.g);
+  if (!grp) return;
+  const me = await memberOf(grp.g, u.uid);
+  if (!me?.admin) return send(res, 403, { error: "Solo quien organiza puede hacer esto." });
 
   if (body.config) {
-    const c = body.config;
-    const config = {
-      title: String(c.title || "").trim().slice(0, 60),
-      time: /^\d{2}:\d{2}$/.test(c.time) ? c.time : "20:00",
-      hours: Math.min(24, Math.max(0.5, Number(c.hours) || 3)),
-      place: String(c.place || "").trim().slice(0, 120),
-    };
-    await saveConfig(config);
+    const config = cleanConfig(body.config, grp.config);
+    await saveConfig(grp.g, config);
     return send(res, 200, { config });
   }
   if (body.remove) {
-    await deleteMember(String(body.remove));
+    if (String(body.remove) === me.id) return send(res, 400, { error: "No puedes quitarte a ti mismo." });
+    await deleteMember(grp.g, String(body.remove));
     return send(res, 200, { ok: true });
   }
   send(res, 400, { error: "Nada que hacer." });
