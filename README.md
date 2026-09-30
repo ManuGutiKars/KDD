@@ -1,44 +1,43 @@
 # Quedada KDD
 
-Calendario de grupo: cada persona entra con el enlace de invitación, se pone un nombre y marca los días que puede ir. Cuando **todos** coinciden en un día, aparece la KDD con botones para añadirla a Google Calendar, Outlook o Apple Calendar (.ics).
+Calendario de grupo para organizar KDD. Al entrar eliges:
 
-- Sin dependencias ni compilación: una página estática (`public/index.html`) y 4 funciones en `api/`.
-- Los datos se guardan en **Upstash Redis** (gratis desde el Marketplace de Vercel).
-- Solo entra quien tiene el enlace con el código de invitación.
+- **Organizar una KDD:** creas el grupo, te conviertes en quien organiza y recibes un enlace para pasar al resto (con botón de copiar y de WhatsApp).
+- **Unirme a una KDD:** pegas el enlace que te han pasado.
 
-## Publicarlo en Vercel (unos 10 minutos)
+Cada persona pone su nombre y marca los días que puede. Cuando **todos** coinciden en un día, aparece la KDD con botones para añadirla a Google Calendar, Outlook o Apple Calendar (.ics).
 
-1. **Sube el proyecto a GitHub.** Crea un repositorio y sube esta carpeta (o usa `vercel` desde la terminal: `npm i -g vercel` y luego `vercel` dentro de la carpeta).
-2. **Importa el repositorio en Vercel:** *Add New… → Project*, elige el repo. En *Framework Preset* deja **Other** y pulsa *Deploy*.
-3. **Crea la base de datos:** en el proyecto, pestaña **Storage → Create Database → Upstash for Redis** (plan gratuito) y conéctala al proyecto. Vercel añade solo las variables `KV_REST_API_URL` y `KV_REST_API_TOKEN`.
-4. **Añade tus códigos:** *Settings → Environment Variables*:
-   - `INVITE_CODE`: el código de invitación (algo largo y difícil de adivinar, p. ej. `kdd-lagarto-7392-azul`).
-   - `ADMIN_CODE`: tu código de organizador, distinto del anterior.
-5. **Vuelve a desplegar** (*Deployments → ⋯ → Redeploy*) para que coja las variables.
+Solo entra quien tiene el enlace: cada KDD tiene un identificador aleatorio de 20 caracteres imposible de adivinar. Las KDD se borran solas tras 180 días sin actividad.
 
-## Uso
+## Publicarlo en Vercel
 
-- **Tú (organizador)** abres una vez:
-  `https://TU-PROYECTO.vercel.app/?invite=INVITE_CODE&admin=ADMIN_CODE`
-  Verás «Ajustes de la quedada» (nombre, hora, duración, lugar), el botón para copiar el enlace de invitación y la opción de quitar miembros.
-- **Tus amigos** abren: `https://TU-PROYECTO.vercel.app/?invite=INVITE_CODE`
-  Escriben su nombre y marcan días. Los códigos se guardan en su navegador y desaparecen de la barra de direcciones.
-- La página se actualiza sola cada 5 segundos.
+1. Sube esta carpeta a tu repositorio de GitHub e impórtalo en Vercel con *Application Preset* **Other**.
+2. En el proyecto, **Storage → Upstash for Redis** (plan gratuito) y conéctalo al proyecto. Vercel añade solo `KV_REST_API_URL` y `KV_REST_API_TOKEN`.
+3. **Redeploy.**
+
+No hace falta ninguna otra variable. (Si tenías `INVITE_CODE` y `ADMIN_CODE` de la versión anterior, puedes borrarlas.)
+
+## Qué puede hacer quien organiza
+
+- Ver y copiar el enlace de invitación en cualquier momento («Ver enlace de invitación»).
+- Cambiar el nombre, la hora, la duración y el lugar de la KDD.
+- Quitar a alguien del grupo.
 
 ## Cosas a tener en cuenta
 
-- **Identidad por navegador.** Al entrar, cada persona recibe una clave guardada en su navegador. Si cambia de móvil o borra los datos del navegador, tendrá que volver a entrar con otro nombre (el organizador puede quitar el antiguo).
-- **Si el enlace se filtra**, cambia `INVITE_CODE` en Vercel, redespliega y pasa el enlace nuevo. Los miembros ya dentro también necesitarán el enlace nuevo.
-- **Añadir al calendario** requiere un clic por persona. Para crear la cita de forma automática habría que añadir login con Google y permisos de Google Calendar.
-- **Probarlo en local:** `npx vercel dev` con un archivo `.env` (mira `.env.example`). Sin credenciales de Redis usa memoria y los datos se pierden al reiniciar.
+- **Identidad por navegador.** Tu nombre y tu papel de organizador se guardan en el navegador donde creaste o te uniste a la KDD. En otro móvil o si borras los datos del navegador, entrarías como una persona nueva (y perderías el papel de organizador).
+- **Cualquiera con la dirección de la web puede crear KDD nuevas**, pero no puede ver ni entrar en las de otros sin su enlace.
+- **Añadir al calendario** requiere un clic por persona.
+- **Probar en local:** `npx vercel dev`. Sin credenciales de Redis usa memoria y los datos se pierden al reiniciar.
 
 ## Estructura
 
 ```
 public/index.html   la página (HTML + CSS + JS)
-api/state.js        GET  estado del grupo
-api/join.js         POST entrar con un nombre
+api/create.js       POST crear una KDD (quien la crea organiza)
+api/state.js        GET  estado de una KDD
+api/join.js         POST unirse con un nombre
 api/me.js           POST cambiar tus días, nombre o «añadido al calendario»
-api/admin.js        POST ajustes y quitar miembros (requiere ADMIN_CODE)
+api/admin.js        POST ajustes y quitar miembros (solo quien organiza)
 lib/                acceso a Redis y utilidades
 ```
