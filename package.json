@@ -1,0 +1,6 @@
+{
+  "name": "quedada-kdd",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=18" }
+}
