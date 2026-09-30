@@ -43,7 +43,13 @@ h2{font-size:20px;font-weight:700}
 .eyebrow{font:500 12px/1 var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .muted{color:var(--muted)}
 header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
-header .who{display:flex;align-items:center;gap:10px;font-size:14px}
+header .who{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:14px}
+.whoname{font-weight:600}
+button.link.subtle{color:var(--muted);font-weight:500}
+.login{max-width:560px;display:flex;flex-direction:column;gap:8px}
+.login p{margin:0}
+.gbtn{min-height:44px;margin:10px 0 4px}
+.fine{font-size:12px;color:var(--muted)}
 button,.btn{font:600 14px/1 var(--f-body);border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:10px 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
 button:hover,.btn:hover{border-color:var(--accent)}
 button.primary,.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
@@ -104,7 +110,8 @@ label{font-size:13px;font-weight:600;display:flex;flex-direction:column;gap:6px}
 /* members */
 .members{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
 .members li{display:flex;align-items:center;gap:10px;min-width:0}
-.av{width:32px;height:32px;border-radius:50%;flex:none;display:grid;place-items:center;font:700 13px var(--f-display);color:#fff}
+.av{position:relative;overflow:hidden;width:32px;height:32px;border-radius:50%;flex:none;display:grid;place-items:center;font:700 13px var(--f-display);color:#fff}
+.av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .members .nm{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .members .sub{font-size:12px;color:var(--muted)}
 .members .grow{flex:1;min-width:0}
@@ -146,6 +153,14 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
   </header>
 
   <div id="notice" hidden></div>
+
+  <section class="panel login" id="loginPanel" hidden>
+    <div class="eyebrow">Acceso</div>
+    <h2 id="loginTitle">Entra con Google</h2>
+    <p class="muted" id="loginText"></p>
+    <div id="gBtn" class="gbtn"></div>
+    <p class="fine">Solo usamos tu nombre, tu foto y tu email de Google para identificarte. Nadie más ve tu email.</p>
+  </section>
 
   <div id="home" hidden>
     <p class="lead">Cada persona marca los días que puede. Cuando todos coincidís en uno, ese es el día de la KDD y cada uno lo añade a su calendario con un clic.</p>
@@ -206,7 +221,7 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
 
   <section class="panel" id="joinPanel" hidden>
     <h2 id="joinTitle">Únete a la quedada</h2>
-    <p class="muted" style="margin:6px 0 14px">Escribe el nombre con el que te verá el grupo. Después marca en el calendario los días que puedes ir.</p>
+    <p class="muted" style="margin:6px 0 14px" id="joinText"></p>
     <form class="join" id="joinForm">
       <label for="nameInput">Tu nombre
         <input id="nameInput" maxlength="40" autocomplete="nickname" placeholder="Ej.: Manolo" required>
@@ -267,7 +282,6 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
 </div>
 <div class="toast" id="toast" hidden></div>
 <script>
-
 (() => {
   const $ = id => document.getElementById(id);
   const TZ = "Europe/Madrid";
@@ -275,36 +289,25 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
   const COLORS = ["#2E4BD1","#C2410C","#0F766E","#9333EA","#BE185D","#15803D","#B45309","#1D4ED8","#7C3AED","#0E7490"];
   const DOW = ["lun","mar","mié","jue","vie","sáb","dom"];
 
-  /* ---------- almacenamiento local: tus KDD y tu identidad en cada una ---------- */
-  const ls = {
-    get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
-    set(k,v){ try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} }
-  };
   const params = new URLSearchParams(location.search);
   const group = (params.get("kdd") || "").trim() || null;
   let sharing = params.get("nuevo") === "1";
   if (params.has("nuevo")) history.replaceState(null, "", location.pathname + "?kdd=" + encodeURIComponent(group || ""));
-  let ident = group ? (ls.get("kdd_groups") || {})[group] || null : null;   // {id, token, title, admin, at}
-  function remember(g, patch){
-    const all = ls.get("kdd_groups") || {};
-    if (patch == null) delete all[g]; else all[g] = {...(all[g] || {}), ...patch, at: Date.now()};
-    ls.set("kdd_groups", all);
-    if (g === group) ident = all[g] || null;
-  }
   const shareUrl = g => `${location.origin}${location.pathname}?kdd=${encodeURIComponent(g)}`;
 
-  /* ---------- API ---------- */
+  /* ---------- API (la sesión va en una cookie) ---------- */
   async function api(path, body){
-    const headers = {"Content-Type":"application/json"};
-    if (ident?.token) { headers["x-member"] = ident.id; headers["x-token"] = ident.token; }
-    const url = "/api/" + path + (body ? "" : "?g=" + encodeURIComponent(group));
-    const r = await fetch(url, body ? {method:"POST", headers, body:JSON.stringify({g: group, ...body})} : {headers});
+    const url = "/api/" + path + (body || !group ? "" : "?g=" + encodeURIComponent(group));
+    const r = await fetch(url, body
+      ? {method:"POST", headers:{"Content-Type":"application/json"}, credentials:"same-origin", body:JSON.stringify(group ? {g: group, ...body} : body)}
+      : {credentials:"same-origin"});
     let data = {}; try { data = await r.json(); } catch {}
     if (!r.ok) { const e = new Error(data.error || "Error " + r.status); e.status = r.status; e.code = data.error; throw e; }
     return data;
   }
 
-  let members = [], config = {}, uid = null, isAdmin = false, loaded = false;
+  let user = null, clientId = null;
+  let members = [], config = {}, uid = null, isAdmin = false, loaded = false, count = 0;
   let renaming = false, busy = 0, writeChain = Promise.resolve();
   const now = new Date();
   let cursor = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -317,7 +320,19 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
   const shortDate = k => parseKey(k).toLocaleDateString("es-ES",{weekday:"short",day:"numeric",month:"short"});
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
   const colorFor = id => { let h=0; for (const c of id) h=(h*31+c.charCodeAt(0))>>>0; return COLORS[h%COLORS.length]; };
-  const initials = n => n.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join("").toUpperCase() || "?";
+  const initials = n => (n || "").trim().split(/\s+/).slice(0,2).map(w=>w[0]).join("").toUpperCase() || "?";
+
+  /** Avatar: foto de Google si la hay; si no (o si falla), iniciales de color. */
+  function avatar(id, name, picture){
+    const el = document.createElement("span"); el.className = "av"; el.style.background = colorFor(id || name || "?");
+    el.textContent = initials(name);
+    if (picture) {
+      const img = document.createElement("img"); img.alt = ""; img.referrerPolicy = "no-referrer"; img.src = picture;
+      img.onerror = () => img.remove();
+      el.append(img);
+    }
+    return el;
+  }
 
   function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>t.hidden=true,2600); }
   function notice(msg, err){ const n=$("notice"); if(!msg){n.hidden=true;return;} n.className="notice"+(err?" err":""); n.textContent=msg; n.hidden=false; }
@@ -371,7 +386,7 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
     const lines = [
       "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Quedada KDD//ES","CALSCALE:GREGORIAN","METHOD:PUBLISH",
       "BEGIN:VEVENT",
-      `UID:kdd-${k}@${location.host}`, `DTSTAMP:${stamp}`,
+      `UID:kdd-${group}-${k}@${location.host}`, `DTSTAMP:${stamp}`,
       `DTSTART;TZID=${TZ}:${f(s)}`, `DTEND;TZID=${TZ}:${f(e)}`,
       `SUMMARY:${esc(E.title)}`, `DESCRIPTION:${esc(details())}`,
       ...(E.place ? [`LOCATION:${esc(E.place)}`] : []),
@@ -385,11 +400,50 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   }
 
+  /* ---------- sesión con Google ---------- */
+  let gsiReady = null;
+  function loadGsi(){
+    if (!gsiReady) gsiReady = new Promise((resolve, reject) => {
+      const sc = document.createElement("script");
+      sc.src = "https://accounts.google.com/gsi/client"; sc.async = true;
+      sc.onload = () => {
+        google.accounts.id.initialize({ client_id: clientId, callback: onGoogleCredential, ux_mode: "popup", auto_select: false, context: "signin" });
+        resolve();
+      };
+      sc.onerror = () => reject(new Error("No se pudo cargar el inicio de sesión de Google."));
+      document.head.append(sc);
+    });
+    return gsiReady;
+  }
+  async function showLogin(title, text){
+    stopPolling();
+    $("home").hidden = true; $("app").hidden = true; $("joinPanel").hidden = true; $("sharePanel").hidden = true;
+    $("loginPanel").hidden = false;
+    $("loginTitle").textContent = title; $("loginText").textContent = text;
+    try {
+      await loadGsi();
+      const box = $("gBtn"); box.textContent = "";
+      google.accounts.id.renderButton(box, { theme: "filled_blue", size: "large", shape: "pill", text: "continue_with", locale: "es", width: 280 });
+    } catch (err) { notice(err.message, true); }
+  }
+  async function onGoogleCredential(resp){
+    try {
+      await api("login", { credential: resp.credential });
+      location.reload();
+    } catch (err) { toast(err.message || "No se pudo iniciar sesión."); }
+  }
+  async function logout(){
+    try { await api("logout", {}); } catch {}
+    try { google.accounts.id.disableAutoSelect(); } catch {}
+    location.href = location.pathname;
+  }
+
   /* ---------- escrituras (una detrás de otra) ---------- */
   function write(fn, okMsg){
     busy++;
     writeChain = writeChain.then(fn).then(r => { if (okMsg) toast(okMsg); return r; }).catch(err => {
-      if (err.status === 401) { remember(group, null); uid = null; notice("Ya no estás en el grupo. Vuelve a entrar con tu nombre.", true); }
+      if (err.status === 401) showLogin("Tu sesión ha caducado", "Vuelve a entrar con Google para seguir.");
+      else if (err.status === 403 && err.code === "member") { uid = null; notice("Ya no estás en este grupo.", true); }
       else if (err.status === 404) showGate();
       else toast(err.message || "No se pudo guardar.");
     }).finally(() => { busy--; refresh(); });
@@ -398,7 +452,7 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
 
   function toggleDay(k){
     const m = me();
-    if (!m) { $("nameInput").focus(); toast("Primero escribe tu nombre para unirte."); return; }
+    if (!m) { $("nameInput").focus(); toast("Primero únete al grupo."); return; }
     const days = new Set(m.days||[]);
     days.has(k) ? days.delete(k) : days.add(k);
     m.days = [...days].filter(d => d >= todayKey).sort(); render();
@@ -409,32 +463,46 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
   }
 
   /* ---------- render ---------- */
+  function renderUserChip(){
+    const w = $("who"); w.textContent = "";
+    if (!user) return;
+    const m = group ? me() : null;
+    const name = m ? m.name : (user.name || "Tú");
+    const t = document.createElement("span"); t.className = "whoname"; t.textContent = name;
+    w.append(avatar(user.uid, name, user.picture), t);
+    if (m) {
+      const b = document.createElement("button"); b.className="link"; b.textContent="Cambiar nombre";
+      b.onclick = () => { renaming = true; $("nameInput").value = m.name; render(); $("nameInput").focus(); };
+      w.append(b);
+    }
+    const out = document.createElement("button"); out.className = "link subtle"; out.textContent = "Cerrar sesión"; out.onclick = logout;
+    w.append(out);
+  }
+
   function renderHeader(){
     const E = ev();
     $("evTitle").textContent = E.title;
     document.title = E.title === "KDD" ? "Quedada KDD" : E.title;
-    const w = $("who"); w.textContent = "";
-    const m = me();
-    if (m) {
-      const av = document.createElement("span"); av.className="av"; av.style.background=colorFor(m.id); av.textContent=initials(m.name);
-      const t = document.createElement("span"); t.textContent = m.name;
-      const b = document.createElement("button"); b.className="link"; b.textContent="Cambiar nombre";
-      b.onclick = () => { renaming = true; $("nameInput").value = m.name; render(); $("nameInput").focus(); };
-      w.append(av,t,b);
-    }
+    renderUserChip();
   }
 
   function renderJoin(){
-    $("joinPanel").hidden = !(loaded && (!me() || renaming));
-    $("joinTitle").textContent = renaming ? "Cambia tu nombre" : "Únete a la quedada";
-    $("joinBtn").textContent = renaming ? "Guardar nombre" : "Entrar al grupo";
+    const show = loaded && (!me() || renaming);
+    $("joinPanel").hidden = !show;
+    $("joinTitle").textContent = renaming ? "Cambia tu nombre" : `Te han invitado a «${ev().title}»`;
+    $("joinText").textContent = renaming
+      ? "Así te verá el resto del grupo."
+      : `${count ? `Ya ${count === 1 ? "hay 1 persona" : `hay ${count} personas`} dentro. ` : ""}Elige el nombre con el que te verá el grupo y después marca los días que puedes.`;
+    $("joinBtn").textContent = renaming ? "Guardar nombre" : "Unirme";
     $("cancelRename").hidden = !renaming;
+    if (show && !renaming && !$("nameInput").value) $("nameInput").value = user?.name || "";
   }
 
   function renderVerdict(info){
     const v = $("verdict"), E = ev(), acts = $("vActions");
+    v.hidden = !me();
     acts.textContent = "";
-    if (!loaded) return;
+    if (!loaded || !me()) return;
     if (info.matches.length) {
       const k = info.matches[0];
       v.className = "verdict hit";
@@ -446,19 +514,17 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
       const ics = document.createElement("button"); ics.className="btn"; ics.textContent="Apple / otros (.ics)"; ics.onclick=()=>downloadIcs(k);
       acts.append(mk("Google Calendar", googleUrl(k)), mk("Outlook", outlookUrl(k,"outlook.live.com")), ics);
       const m = me();
-      if (m) {
-        const b = document.createElement("button");
-        const done = m.added === k;
-        b.className = "btn" + (done ? " done" : "");
-        b.textContent = done ? "✓ Ya está en mi calendario" : "Marcar como añadido";
-        b.onclick = () => { m.added = done ? null : k; render(); write(() => api("me", {added: m.added})); };
-        acts.append(b);
-      }
+      const b = document.createElement("button");
+      const done = m.added === k;
+      b.className = "btn" + (done ? " done" : "");
+      b.textContent = done ? "✓ Ya está en mi calendario" : "Marcar como añadido";
+      b.onclick = () => { m.added = done ? null : k; render(); write(() => api("me", {added: m.added})); };
+      acts.append(b);
     } else {
       v.className = "verdict";
       $("vEyebrow").textContent = "Aún sin fecha";
       if (info.n < 2) {
-        $("vDate").textContent = info.n === 0 ? "Esperando al grupo" : "Falta gente";
+        $("vDate").textContent = "Falta gente";
         $("vMeta").textContent = "La cita se crea cuando al menos dos personas se han unido y todas marcan el mismo día.";
       } else {
         let best = null;
@@ -509,13 +575,12 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
     const kdd = info.matches[0];
     for (const m of members) {
       const li = document.createElement("li");
-      const av = document.createElement("span"); av.className="av"; av.style.background=colorFor(m.id); av.textContent=initials(m.name);
       const g = document.createElement("div"); g.className="grow";
       const nm = document.createElement("div"); nm.className="nm"; nm.textContent = m.name + (m.id===uid ? " (tú)" : "");
       const sub = document.createElement("div"); sub.className="sub";
       const nd = (m.days||[]).filter(d=>d>=todayKey).length;
       sub.textContent = (m.admin ? "Organiza · " : "") + (nd ? (nd===1 ? "1 día marcado" : `${nd} días marcados`) : "Sin días marcados");
-      g.append(nm,sub); li.append(av,g);
+      g.append(nm,sub); li.append(avatar(m.id, m.name, m.picture), g);
       if (kdd) { const p=document.createElement("span"); p.className="pill"+(m.added===kdd?" ok":""); p.textContent = m.added===kdd ? "en calendario" : "pendiente"; li.append(p); }
       if (isAdmin && m.id !== uid) {
         const x=document.createElement("button"); x.className="link"; x.textContent="Quitar"; x.setAttribute("aria-label","Quitar a "+m.name);
@@ -535,7 +600,7 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
     if (!show) return;
     const link = shareUrl(group);
     $("shareLink").value = link;
-    $("waShare").href = "https://wa.me/?text=" + encodeURIComponent(`¡Organizo una ${ev().title}! Entra, pon tu nombre y marca los días que puedes: ${link}`);
+    $("waShare").href = "https://wa.me/?text=" + encodeURIComponent(`¡Organizo una ${ev().title}! Entra con tu cuenta de Google y marca los días que puedes: ${link}`);
   }
 
   function renderAdmin(){
@@ -549,13 +614,13 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
 
   function render(){
     const info = computeDays();
+    $("app").hidden = !me();
     renderHeader(); renderJoin(); renderVerdict(info); renderCal(info); renderMembers(info); renderAdmin(); renderShare();
   }
 
   function showGate(){
     $("gate").hidden = false; $("app").hidden = true; $("joinPanel").hidden = true; $("sharePanel").hidden = true;
-    $("who").textContent = ""; $("evTitle").textContent = "KDD no encontrada"; stopPolling();
-    if (group) remember(group, null);
+    $("evTitle").textContent = "KDD no encontrada"; stopPolling();
   }
 
   /* ---------- carga y sondeo ---------- */
@@ -564,9 +629,12 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
     try {
       const s = await api("state");
       if (busy) return;
-      members = s.members; config = s.config || {}; isAdmin = s.admin; uid = s.me;
-      if (ident && !s.me) remember(group, null);
-      if (ident && s.me && (ident.title !== config.title || !!ident.admin !== s.admin)) remember(group, {title: config.title, admin: s.admin});
+      if (!s.login) {
+        config = s.config || {};
+        $("evTitle").textContent = ev().title;
+        return showLogin(`Te han invitado a «${ev().title}»`, "Entra con tu cuenta de Google para unirte y marcar los días que puedes.");
+      }
+      members = s.members; config = s.config || {}; isAdmin = s.admin; uid = s.me; count = s.count || 0;
       loaded = true; notice(null); render();
     } catch (err) {
       if (err.status === 404) showGate();
@@ -575,10 +643,10 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
   }
   let pollTimer = null;
   function startPolling(){ stopPolling(); pollTimer = setInterval(() => { if (!document.hidden) refresh(); }, POLL_MS); }
-  function stopPolling(){ clearInterval(pollTimer); }
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+  function stopPolling(){ clearInterval(pollTimer); pollTimer = null; }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && pollTimer) refresh(); });
 
-  /* ---------- eventos ---------- */
+  /* ---------- eventos del grupo ---------- */
   $("prev").onclick = () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth()-1, 1); render(); };
   $("next").onclick = () => { cursor = new Date(cursor.getFullYear(), cursor.getMonth()+1, 1); render(); };
   $("todayBtn").onclick = () => { cursor = new Date(now.getFullYear(), now.getMonth(), 1); render(); };
@@ -589,22 +657,18 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
     if (!name) return;
     const btn = $("joinBtn"); btn.disabled = true;
     try {
-      if (me()) {
-        await api("me", {name}); renaming = false; toast("Nombre guardado");
-      } else {
-        const r = await api("join", {name});
-        remember(group, {id: r.member.id, token: r.token, title: ev().title, admin: false});
-        toast("¡Dentro! Marca los días que puedes.");
-      }
+      if (me()) { await api("me", {name}); renaming = false; toast("Nombre guardado"); }
+      else { await api("join", {name}); toast("¡Dentro! Marca los días que puedes."); }
       await refresh();
     } catch (err) {
-      toast(err.message || "No se pudo guardar.");
+      if (err.status === 401) showLogin("Tu sesión ha caducado", "Vuelve a entrar con Google para seguir.");
+      else toast(err.message || "No se pudo guardar.");
     } finally { btn.disabled = false; }
   });
   $("settingsForm").addEventListener("submit", e => {
     e.preventDefault();
     const c = { title:$("sTitle").value, time:$("sTime").value || "20:00", hours:$("sDur").value, place:$("sPlace").value };
-    config = {...c, hours:Number(c.hours)||3}; render();
+    config = {...config, ...c, hours:Number(c.hours)||3}; render();
     write(() => api("admin", {config: c}), "Ajustes guardados");
   });
   $("copyShare").onclick = async () => {
@@ -616,18 +680,24 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
   $("showShare").onclick = () => { sharing = true; render(); $("sharePanel").scrollIntoView({behavior:"smooth", block:"center"}); };
 
   /* ---------- pantalla de inicio ---------- */
-  function showHome(){
-    $("home").hidden = false; $("app").hidden = true; $("verdict").hidden = true;
+  async function showHome(){
+    $("home").hidden = false; $("app").hidden = true;
     $("evTitle").textContent = "Quedada KDD";
-    const all = Object.entries(ls.get("kdd_groups") || {}).sort((a,b) => (b[1].at||0) - (a[1].at||0));
-    $("myList").hidden = !all.length;
-    const ul = $("myGroups"); ul.textContent = "";
-    for (const [g, info] of all) {
-      const li = document.createElement("li"), a = document.createElement("a");
-      a.href = "?kdd=" + encodeURIComponent(g);
-      const t = document.createElement("span"); t.className = "t"; t.textContent = info.title || "KDD";
-      const p = document.createElement("span"); p.className = "pill" + (info.admin ? " ok" : ""); p.textContent = info.admin ? "organizas" : "participas";
-      a.append(t, p); li.append(a); ul.append(li);
+    renderUserChip();
+    $("cName").value = user.name || "";
+    try {
+      const { groups } = await api("mine");
+      $("myList").hidden = !groups.length;
+      const ul = $("myGroups"); ul.textContent = "";
+      for (const it of groups) {
+        const li = document.createElement("li"), a = document.createElement("a");
+        a.href = "?kdd=" + encodeURIComponent(it.g);
+        const t = document.createElement("span"); t.className = "t"; t.textContent = it.title || "KDD";
+        const p = document.createElement("span"); p.className = "pill" + (it.admin ? " ok" : ""); p.textContent = it.admin ? "organizas" : "participas";
+        a.append(t, p); li.append(a); ul.append(li);
+      }
+    } catch (err) {
+      if (err.status === 401) showLogin("Organiza tu KDD", "Entra con tu cuenta de Google para crear una KDD o unirte a una.");
     }
   }
   $("createForm").addEventListener("submit", async e => {
@@ -637,9 +707,9 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
     const btn = $("createBtn"); btn.disabled = true; btn.textContent = "Creando…";
     try {
       const r = await api("create", {name, title});
-      remember(r.group, {id: r.member.id, token: r.token, title: r.config.title, admin: true});
       location.href = "?kdd=" + encodeURIComponent(r.group) + "&nuevo=1";
     } catch (err) {
+      if (err.status === 401) return showLogin("Tu sesión ha caducado", "Vuelve a entrar con Google para seguir.");
       toast(err.message || "No se pudo crear la KDD.");
       btn.disabled = false; btn.textContent = "Crear y obtener enlace";
     }
@@ -652,11 +722,23 @@ a.back{text-decoration:none;color:var(--accent);display:inline-block;margin-bott
     location.href = "?kdd=" + m[1];
   });
 
-  if (!group) showHome();
-  else {
-    $("backLink").hidden = false; $("homeEyebrow").hidden = true;
-    $("app").hidden = false; render(); refresh(); startPolling();
-  }
+  /* ---------- arranque ---------- */
+  (async () => {
+    if (group) { $("backLink").hidden = false; $("homeEyebrow").hidden = true; }
+    try {
+      const s = await api("session");
+      user = s.user; clientId = s.clientId;
+    } catch (err) {
+      notice(err.message || "No se pudo conectar con el servidor.", true); return;
+    }
+    if (!user) {
+      if (group) return refresh();             // muestra a qué KDD te invitan y pide entrar
+      $("evTitle").textContent = "Quedada KDD";
+      return showLogin("Organiza tu KDD", "Cada persona marca los días que puede. Cuando todos coincidís en uno, ese es el día de la KDD. Entra con tu cuenta de Google para empezar.");
+    }
+    if (!group) return showHome();
+    render(); await refresh(); startPolling();
+  })();
 })();
 </script>
 </body>

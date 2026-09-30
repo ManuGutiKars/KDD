@@ -1,14 +1,16 @@
 // POST /api/me {g, name?, days?, added?} — cambia tus propios datos
-import { readRequest, loadGroup, send, currentMember, cleanDays, cleanName, publicMember, safe } from "../lib/http.js";
+import { readRequest, loadGroup, send, requireUser, memberOf, cleanDays, cleanName, publicMember, safe } from "../lib/http.js";
 import { getMembers, saveMember } from "../lib/store.js";
 
 async function handler(req, res) {
   const body = await readRequest(req, res);
   if (!body) return;
+  const u = requireUser(req, res);
+  if (!u) return;
   const grp = await loadGroup(res, body.g);
   if (!grp) return;
-  const m = await currentMember(req, grp.g);
-  if (!m) return send(res, 401, { error: "member" });
+  const m = await memberOf(grp.g, u.uid);
+  if (!m) return send(res, 403, { error: "member" });
 
   if ("name" in body) {
     const name = cleanName(body.name);
@@ -20,6 +22,7 @@ async function handler(req, res) {
   }
   if ("days" in body) m.days = cleanDays(body.days);
   if ("added" in body) m.added = cleanDays([body.added])[0] || null;
+  if (u.picture) m.picture = u.picture;
 
   await saveMember(grp.g, m);
   send(res, 200, { member: publicMember(m) });

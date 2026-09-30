@@ -1,13 +1,15 @@
-// POST /api/admin {g, config?} | {g, remove: id} — solo el organizador de esa KDD
-import { readRequest, loadGroup, send, currentMember, cleanConfig, safe } from "../lib/http.js";
+// POST /api/admin {g, config?} | {g, remove: uid} — solo el organizador de esa KDD
+import { readRequest, loadGroup, send, requireUser, memberOf, cleanConfig, safe } from "../lib/http.js";
 import { saveConfig, deleteMember } from "../lib/store.js";
 
 async function handler(req, res) {
   const body = await readRequest(req, res);
   if (!body) return;
+  const u = requireUser(req, res);
+  if (!u) return;
   const grp = await loadGroup(res, body.g);
   if (!grp) return;
-  const me = await currentMember(req, grp.g);
+  const me = await memberOf(grp.g, u.uid);
   if (!me?.admin) return send(res, 403, { error: "Solo quien organiza puede hacer esto." });
 
   if (body.config) {
