@@ -1,6 +1,6 @@
-// POST /api/me {g, name?, days?, added?} — cambia tus propios datos
+// POST /api/me {g, name?, days?, added?} | {g, leave: true} — cambia tus propios datos
 import { readRequest, loadGroup, send, requireUser, memberOf, cleanDays, cleanName, publicMember, safe } from "../lib/http.js";
-import { getMembers, saveMember } from "../lib/store.js";
+import { getMembers, saveMember, deleteMember } from "../lib/store.js";
 import { checkMatch, originOf } from "../lib/notify.js";
 
 async function handler(req, res) {
@@ -12,6 +12,14 @@ async function handler(req, res) {
   if (!grp) return;
   const m = await memberOf(grp.g, u.uid);
   if (!m) return send(res, 403, { error: "member" });
+
+  if (body.leave) {
+    if (m.admin) return send(res, 400, { error: "Organizas esta KDD: si ya no la necesitas, elimínala." });
+    await deleteMember(grp.g, m.id);
+    try { await checkMatch(grp.g, grp.config, await getMembers(grp.g), originOf(req)); }
+    catch (err) { console.error("[kdd] avisos", err); }
+    return send(res, 200, { ok: true });
+  }
 
   if ("name" in body) {
     const name = cleanName(body.name);

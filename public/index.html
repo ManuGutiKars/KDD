@@ -156,6 +156,13 @@ button.install{background:var(--accent-soft);border-color:transparent;color:var(
 .pushbox{display:flex;flex-direction:column;gap:8px}
 .pushbox.inset{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
 .pushbox h3{font-size:16px}
+.dangerzone{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.dangerzone p{margin:0;font-size:13px}
+button.danger{border-color:var(--danger);color:var(--danger);background:transparent;align-self:flex-start}
+button.danger.armed{background:var(--danger);color:var(--bg)}
+.mylist li{display:flex;gap:8px;align-items:center}
+.mylist li a{flex:1;min-width:0}
+.mylist li button{flex:none}
 .pushbox p{margin:0;font-size:13px;color:var(--muted)}
 .pushbox .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .pushbox .ok{color:var(--fg);font-weight:600;font-size:14px}
@@ -312,7 +319,12 @@ button.install{background:var(--accent-soft);border-color:transparent;color:var(
           <button class="primary" type="submit" style="margin-top:12px">Guardar ajustes</button>
         </form>
         <button type="button" id="showShare" style="margin-top:14px">Ver enlace de invitación</button>
+        <div class="dangerzone">
+          <p class="muted">¿Ya se hizo la KDD? Elimínala para todo el grupo. No se puede deshacer.</p>
+          <button type="button" class="danger" id="deleteBtn">Eliminar esta KDD</button>
+        </div>
       </details>
+      <button type="button" class="link subtle" id="leaveBtn" style="margin-top:14px" hidden>Salir de esta KDD</button>
     </aside>
   </div>
   </div>
@@ -647,6 +659,7 @@ button.install{background:var(--accent-soft);border-color:transparent;color:var(
 
   function renderAdmin(){
     $("ownerBox").hidden = !isAdmin;
+    $("leaveBtn").hidden = isAdmin || !me();
     if (!isAdmin) return;
     if (!document.activeElement?.closest?.("#settingsForm")) {
       const E = ev();
@@ -721,6 +734,24 @@ button.install{background:var(--accent-soft);border-color:transparent;color:var(
   $("closeShare").onclick = () => { sharing = false; render(); };
   $("showShare").onclick = () => { sharing = true; render(); $("sharePanel").scrollIntoView({behavior:"smooth", block:"center"}); };
 
+  /** Botón de dos pasos: el primer clic pide confirmación y el segundo ejecuta. */
+  function armed(btn, confirmText, action){
+    const original = btn.textContent;
+    btn.onclick = async () => {
+      if (btn.dataset.armed) { btn.disabled = true; await action(); btn.disabled = false; return; }
+      btn.dataset.armed = "1"; btn.classList.add("armed"); btn.textContent = confirmText;
+      setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.classList.remove("armed"); btn.textContent = original; } }, 4000);
+    };
+  }
+  armed($("deleteBtn"), "Pulsa otra vez para eliminarla", async () => {
+    try { await api("admin", { deleteGroup: true }); location.href = location.pathname; }
+    catch (err) { toast(err.message || "No se pudo eliminar."); }
+  });
+  armed($("leaveBtn"), "Pulsa otra vez para salir", async () => {
+    try { await api("me", { leave: true }); location.href = location.pathname; }
+    catch (err) { toast(err.message || "No se pudo salir."); }
+  });
+
   /* ---------- pantalla de inicio ---------- */
   async function showHome(){
     $("home").hidden = false; $("app").hidden = true;
@@ -736,7 +767,18 @@ button.install{background:var(--accent-soft);border-color:transparent;color:var(
         a.href = "?kdd=" + encodeURIComponent(it.g);
         const t = document.createElement("span"); t.className = "t"; t.textContent = it.title || "KDD";
         const p = document.createElement("span"); p.className = "pill" + (it.admin ? " ok" : ""); p.textContent = it.admin ? "organizas" : "participas";
-        a.append(t, p); li.append(a); ul.append(li);
+        a.append(t, p); li.append(a);
+        const x = document.createElement("button"); x.className = "link subtle";
+        x.textContent = it.admin ? "Eliminar" : "Salir";
+        x.setAttribute("aria-label", (it.admin ? "Eliminar " : "Salir de ") + (it.title || "KDD"));
+        armed(x, it.admin ? "¿Eliminar para todos?" : "¿Seguro?", async () => {
+          try {
+            await api(it.admin ? "admin" : "me", it.admin ? { g: it.g, deleteGroup: true } : { g: it.g, leave: true });
+            li.remove(); if (!ul.children.length) $("myList").hidden = true;
+            toast(it.admin ? "KDD eliminada" : "Has salido de la KDD");
+          } catch (err) { toast(err.message || "No se pudo completar."); }
+        });
+        li.append(x); ul.append(li);
       }
     } catch (err) {
       if (err.status === 401) showLogin("Organiza tu KDD", "Entra con tu cuenta de Google para crear una KDD o unirte a una.");

@@ -1,6 +1,6 @@
-// POST /api/admin {g, config?} | {g, remove: uid} — solo el organizador de esa KDD
+// POST /api/admin {g, config?} | {g, remove: uid} | {g, deleteGroup: true} — solo el organizador de esa KDD
 import { readRequest, loadGroup, send, requireUser, memberOf, cleanConfig, safe } from "../lib/http.js";
-import { saveConfig, deleteMember, getMembers } from "../lib/store.js";
+import { saveConfig, deleteMember, getMembers, deleteGroup } from "../lib/store.js";
 import { checkMatch, originOf } from "../lib/notify.js";
 
 async function handler(req, res) {
@@ -13,6 +13,11 @@ async function handler(req, res) {
   const me = await memberOf(grp.g, u.uid);
   if (!me?.admin) return send(res, 403, { error: "Solo quien organiza puede hacer esto." });
 
+  if (body.deleteGroup) {
+    const members = await getMembers(grp.g);
+    await deleteGroup(grp.g, members.map(m => m.id));
+    return send(res, 200, { ok: true });
+  }
   if (body.config) {
     const config = cleanConfig(body.config, grp.config);
     await saveConfig(grp.g, config);
