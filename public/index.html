@@ -292,7 +292,7 @@ button.install{background:var(--accent-soft);border-color:transparent;color:var(
       <div class="legend">
         <span><i class="sw" style="background:var(--accent);border-color:var(--accent)"></i>Tú puedes</span>
         <span><i class="sw" style="background:var(--match);border-color:var(--match)"></i>Pueden todos: KDD</span>
-        <span><span class="count" style="font:500 11px var(--f-mono)">2/4</span> quién puede ese día</span>
+        <span id="legendCount"><span class="count" style="font:500 11px var(--f-mono)" id="legendEx">1/2</span> <span id="legendTxt">cuántos del grupo pueden ese día</span></span>
       </div>
     </section>
 
@@ -583,6 +583,9 @@ button.install{background:var(--accent-soft);border-color:transparent;color:var(
 
   function renderCal(info){
     $("monthLabel").textContent = cap(cursor.toLocaleDateString("es-ES",{month:"long",year:"numeric"}));
+    const nLeg = Math.max(info.n, 1);
+    $("legendEx").textContent = `${Math.ceil(nLeg / 2)}/${nLeg}`;
+    $("legendTxt").textContent = nLeg === 1 ? "cuántos pueden ese día" : `cuántos de los ${nLeg} del grupo pueden ese día`;
     const cal = $("cal"); cal.textContent = "";
     for (const d of DOW) { const e=document.createElement("div"); e.className="dow"; e.textContent=d; cal.append(e); }
     const offset = (cursor.getDay()+6)%7;
