@@ -292,7 +292,6 @@ button.install{background:var(--accent-soft);border-color:transparent;color:var(
       <div class="legend">
         <span><i class="sw" style="background:var(--accent);border-color:var(--accent)"></i>Tú puedes</span>
         <span><i class="sw" style="background:var(--match);border-color:var(--match)"></i>Pueden todos: KDD</span>
-        <span id="legendTxt">El número de cada día indica cuántos del grupo pueden ir</span>
       </div>
     </section>
 
@@ -583,9 +582,6 @@ button.install{background:var(--accent-soft);border-color:transparent;color:var(
 
   function renderCal(info){
     $("monthLabel").textContent = cap(cursor.toLocaleDateString("es-ES",{month:"long",year:"numeric"}));
-    $("legendTxt").textContent = info.n > 1
-      ? `El número de cada día indica cuántos de los ${info.n} pueden ir`
-      : "El número de cada día indica cuántos del grupo pueden ir";
     const cal = $("cal"); cal.textContent = "";
     for (const d of DOW) { const e=document.createElement("div"); e.className="dow"; e.textContent=d; cal.append(e); }
     const offset = (cursor.getDay()+6)%7;
